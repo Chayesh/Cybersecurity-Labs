@@ -178,6 +178,32 @@ MD5: AAE3F5A29935E6ABCC2C2754D12A9AF0
 This hash can be used to pivot to threat intelligence sources (e.g. VirusTotal) to identify
 the malware family and confirm known-malicious status.
 
+### 7. Confirming the Defacement (Impact)
+
+The defacement image identified via `stream:http` (`poisonivy-is-coming-for-you-batman.jpeg`,
+served from `23.22.63.114`) was cross-verified using Fortinet UTM logs, which independently
+inspect and log web traffic hostnames:
+
+```spl
+index=botsv1 sourcetype=fgt_utm "poisonivy-is-coming-for-you-batman.jpeg"
+| rex field="_raw" "hostname=(?<hostname>\w+)"
+| table _time, hostname, dstip, action
+```
+
+Results:
+
+| Field | Value |
+|---|---|
+| Hostname | `prankglassinebracket.jumpingcrab.com:1337` |
+| Destination IP | `23.22.63.114` |
+| Firewall action | `passthrough` |
+
+This cross-confirms the destination IP found independently via `stream:http`, and the
+`passthrough` action confirms the traffic was inspected and **allowed** by the firewall — the
+defacement request was not blocked, meaning the image retrieval (and resulting website
+defacement) succeeded. The non-standard port (`:1337`, "leet") is a stylistic signature
+consistent with the attacker's broader branding across this campaign.
+
 ## Attack Chain Summary
 
 ```
