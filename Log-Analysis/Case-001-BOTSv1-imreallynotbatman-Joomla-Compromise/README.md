@@ -26,9 +26,14 @@ by a specific log entry, not assumption.
 | CMS | Joomla |
 | Scanning tool identified | Acunetix Web Vulnerability Scanner (Free Edition) v10.0 |
 | First brute-force password attempted | `12345678` |
+| Correct admin password (cracked) | `batman` |
+| IP that reused the cracked credential to log in | `40.80.148.42` |
 | Malicious files uploaded | `3791.exe`, `agent.php` |
+| MD5 hash of `3791.exe` | `AAE3F5A29935E6ABCC2C2754D12A9AF0` |
 | Vulnerable components exploited | `com_installer`, `com_extplorer` |
+| Defacement file | `poisonivy-is-coming-for-you-batman.jpeg` |
 | Defacement resource domain | `prankglassinebracket.jumpingcrab.com` |
+| Defacement domain resolved IP | `23.22.63.114` |
 | Attributed group | Po1s0n1vy |
 
 ## Investigation Timeline & Methodology
@@ -99,6 +104,23 @@ index=botsv1 sourcetype=stream:http dest_ip=192.168.250.70 http_method=POST uri=
 - First password attempted (chronologically earliest): `12345678`
 - 412 total attempts recorded
 
+The correct password was extracted by pulling every submitted `passwd` value out of `form_data`
+and grouping by both password and source IP:
+
+```spl
+index=botsv1 sourcetype=stream:http dest_ip=192.168.250.70 http_method=POST uri=/joomla/administrator/index.php
+| rex field=form_data "passwd=(?<password>\w+)"
+| stats count by password, src_ip
+| sort -count
+```
+
+This revealed the correct password, **`batman`**, appearing twice — once from `23.22.63.114`
+(as just one guess among hundreds in the dictionary) and again from **`40.80.148.42`**, the same
+IP previously identified as the Acunetix reconnaissance source. This is a significant finding:
+the actor split roles across their infrastructure — `23.22.63.114` handled the automated
+credential-cracking, while `40.80.148.42` reused the cracked credential to perform an
+authenticated, manual login and carry out the actual exploitation that followed.
+
 ### 5. Confirming Successful Compromise
 
 The initial hypothesis — that a distinct HTTP response would mark a successful login — did not
@@ -147,6 +169,14 @@ Image: C:\inetpub\wwwroot\joomla\3791.exe
 ```
 
 This confirms the uploaded binary was not just written to disk — it executed on the host.
+A further search against Sysmon process-creation events (EventCode=1) recovered the file hash:
+
+```
+MD5: AAE3F5A29935E6ABCC2C2754D12A9AF0
+```
+
+This hash can be used to pivot to threat intelligence sources (e.g. VirusTotal) to identify
+the malware family and confirm known-malicious status.
 
 ## Attack Chain Summary
 
